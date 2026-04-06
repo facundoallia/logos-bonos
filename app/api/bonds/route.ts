@@ -1,65 +1,85 @@
 import { NextRequest } from 'next/server';
-import { BondConfig, LiveBond, HistoricalPoint } from '@/lib/types';
-import bondsConfigRaw from '@/config/bonds-config.json';
+import { BondConfigSlim, LiveBond } from '@/lib/types';
+import bondsList from '@/config/bonds-config.json';
 
-const bondsConfig = bondsConfigRaw as BondConfig[];
-const USD_CATS = ['hard-dollar-gd', 'hard-dollar-al', 'bopreal'];
+const bonds = bondsList as BondConfigSlim[];
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category') || 'all';
 
   const filtered = category === 'all'
-    ? bondsConfig
-    : bondsConfig.filter((b) => b.categoria === category);
+    ? bonds
+    : bonds.filter((b) => b.categoria === category);
 
-  let prices: LiveBond[] = [];
+  // Fetch data912 ONCE (arg_bonds + arg_notes)
+  let bondsData: LiveBond[] = [];
+  let notesData: LiveBond[] = [];
   try {
-    const res = await fetch('https://data912.com/live/arg_bonds', {
-      next: { revalidate: 60 },
-    });
-    if (res.ok) prices = await res.json();
+    const [r1, r2] = await Promise.all([
+      fetch('https://data912.com/live/arg_bonds', { next: { revalidate: 60 } }),
+      fetch('https://data912.com/live/arg_notes', { next: { revalidate: 60 } }),
+    ]);
+    if (r1.ok) bondsData = await r1.json();
+    if (r2.ok) notesData = await r2.json();
   } catch {}
 
-  const priceMap = new Map<string, LiveBond>();
-  prices.forEach((p) => priceMap.set(p.symbol, p));
+  const allPrices = [...bondsData, ...notesData].filter(
+    (p) => p.symbol && !p.symbol.includes(' ')
+  );
+  const priceMap = new Map<string, LiveBond>(allPrices.map((p) => [p.symbol, p]));
 
-  const tirResults = await Promise.allSettled(
-    filtered.map(async (bond) => {
-      const suffix = USD_CATS.includes(bond.categoria) ? 'D' : '';
-      const ticker = `${bond.ticker}${suffix}`;
-      try {
-        const res = await fetch(`https://data912.com/historical/bonds/${ticker}`, {
-          next: { revalidate: 86400 },
-        });
-        if (!res.ok) return { ticker: bond.ticker, tir: null };
-        const hist: HistoricalPoint[] = await res.json();
-        const last = hist[hist.length - 1];
-        return { ticker: bond.ticker, tir: last?.sa ?? null };
-      } catch {
-        return { ticker: bond.ticker, tir: null };
-      }
-    })
+  // Fetch bonistas metadata in parallel for all filtered bonds
+  const bonistasResults = await Promise.allSettled(
+    filtered.map((b) =>
+      fetch(`https://bonistas.com/api/bond/${b.ticker}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        next: { revalidate: 300 },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+    )
   );
 
   const enriched = filtered.map((bond, i) => {
-    const suffix = USD_CATS.includes(bond.categoria) ? 'D' : '';
-    const priceD = priceMap.get(`${bond.ticker}${suffix}`);
-    const priceARS = priceMap.get(bond.ticker);
-    const priceC = priceMap.get(`${bond.ticker}C`);
+    const bonistasRaw =
+      bonistasResults[i].status === 'fulfilled' ? bonistasResults[i].value : null;
+    const meta = bonistasRaw?.bond ?? bonistasRaw ?? null;
 
-    const tirResult = tirResults[i];
-    const tir = tirResult.status === 'fulfilled' ? tirResult.value.tir : null;
+    const tirRaw: number | null = meta?.tir ?? null;
+    const mdRaw: number | null = meta?.modified_duration ?? null;
+    const tem = tirRaw !== null ? Math.pow(1 + tirRaw, 1 / 12) - 1 : null;
+    const tna = tem !== null ? tem * 12 : null;
+
+    const priceBase = priceMap.get(bond.ticker) ?? null;
+    const priceD = bond.sufijoPrecioUSD === 'D' ? (priceMap.get(`${bond.ticker}D`) ?? null) : null;
+    const priceC = bond.sufijoPrecioUSD != null ? (priceMap.get(`${bond.ticker}C`) ?? null) : null;
+
+    const mainPrice = priceD ?? priceBase;
 
     return {
       ...bond,
+      vencimiento: meta?.end_date ?? null,
+      emision: meta?.start_date ?? null,
+      descripcion: meta?.description ?? null,
+      frecuenciaCupon: meta?.coupon_frequency ?? null,
+      monedaCupon: meta?.coupon_currency ?? null,
+      amortizacion: meta?.amortization ?? null,
+      index: meta?.index ?? null,
+      daysToCoupon: meta?.days_to_coupon ?? null,
+      daysToFinish: meta?.days_to_finish ?? null,
+      fairValue: meta?.fair_value ?? null,
+      parity: meta?.parity ?? null,
+      volumenM: meta?.volume ?? null,
+      tir: tirRaw !== null ? +(tirRaw * 100).toFixed(2) : null,
+      tem: tem !== null ? +(tem * 100).toFixed(4) : null,
+      tna: tna !== null ? +(tna * 100).toFixed(2) : null,
+      md: mdRaw !== null ? +mdRaw.toFixed(2) : null,
       precioUSD: priceD?.c ?? null,
-      precioARS: priceARS?.c ?? null,
+      precioARS: priceBase?.c ?? null,
       precioMEP: priceC?.c ?? null,
-      varDia: priceD?.pct_change ?? priceARS?.pct_change ?? null,
-      volumen: priceD?.q_op ?? priceARS?.q_op ?? null,
-      tir,
-      tirPct: tir !== null ? +(tir * 100).toFixed(2) : null,
+      varDia: mainPrice?.pct_change ?? null,
+      volumenBYMA: mainPrice?.q_op ?? null,
     };
   });
 

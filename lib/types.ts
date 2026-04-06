@@ -8,18 +8,11 @@ export type BondCategoria =
   | 'badlar'
   | 'bopreal';
 
-export interface BondConfig {
+export interface BondConfigSlim {
   ticker: string;
   nombre: string;
-  familia: string;
   categoria: BondCategoria;
-  legislacion: string;
-  vencimiento: string;
-  cuponAnualPct: number;
-  frecuenciaCupon: string;
-  monedaCupon: string;
-  monedaCapital: string;
-  amortizacion: string;
+  sufijoPrecioUSD: 'D' | 'C' | null;
 }
 
 export interface LiveBond {
@@ -45,14 +38,31 @@ export interface HistoricalPoint {
   sa: number | null;
 }
 
-export interface EnrichedBond extends BondConfig {
+export interface EnrichedBond extends BondConfigSlim {
+  // Bonistas metadata
+  vencimiento: string | null;
+  emision: string | null;
+  descripcion: string | null;
+  frecuenciaCupon: string | null;
+  monedaCupon: string | null;
+  amortizacion: string | null;
+  index: string | null;
+  daysToCoupon: number | null;
+  daysToFinish: number | null;
+  fairValue: number | null;
+  parity: number | null;
+  volumenM: number | null;
+  // Rates
+  tir: number | null;     // % ej: 9.95
+  tem: number | null;     // % ej: 0.7948
+  tna: number | null;     // % ej: 9.54
+  md: number | null;      // modified duration ej: 4.70
+  // Prices
   precioUSD: number | null;
   precioARS: number | null;
   precioMEP: number | null;
   varDia: number | null;
-  volumen: number | null;
-  tir: number | null;
-  tirPct: number | null;
+  volumenBYMA: number | null;
 }
 
 export interface RatesData {

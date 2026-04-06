@@ -1,160 +1,188 @@
 'use client';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ReferenceLine,
+  ComposedChart, Scatter, Line, XAxis, YAxis,
+  Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { EnrichedBond } from '@/lib/types';
+import { fitYieldCurve, generateCurveLine, calcSpreadBps, BondPoint } from '@/lib/yieldCurve';
 
 interface Props {
   bonds: EnrichedBond[];
-  subTab?: string;
-  selectedTicker: string | null;
   onSelect: (ticker: string) => void;
+  selectedTicker: string | null;
+  title?: string;
 }
 
-function fmtDate(s: string): string {
-  return s.slice(0, 4);
-}
-
-interface ChartPoint {
+interface ScatterPoint {
+  duration: number;
+  tir: number;
   ticker: string;
-  year: string;
-  tir: number | null;
-  series?: string;
+  nombre: string;
+  spreadBps: number;
+  isSelected: boolean;
 }
 
-export function YieldCurve({ bonds, subTab, selectedTicker, onSelect }: Props) {
-  const hasTir = bonds.some((b) => b.tirPct !== null);
+function CustomDot(props: {
+  cx?: number;
+  cy?: number;
+  payload?: ScatterPoint;
+  onSelect: (t: string) => void;
+}) {
+  const { cx, cy, payload, onSelect } = props;
+  if (!cx || !cy || !payload?.ticker) return null;
+  const { spreadBps, isSelected } = payload;
+  const color =
+    spreadBps > 10 ? '#16A34A' : spreadBps < -10 ? '#DC2626' : '#D97706';
+  const r = isSelected ? 9 : 6;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={r}
+      fill={color}
+      stroke={isSelected ? '#0D1B2A' : '#fff'}
+      strokeWidth={isSelected ? 2 : 1.5}
+      style={{ cursor: 'pointer' }}
+      onClick={() => onSelect(payload.ticker)}
+    />
+  );
+}
 
-  if (!hasTir) {
+export function YieldCurve({ bonds, onSelect, selectedTicker, title }: Props) {
+  const points: BondPoint[] = bonds
+    .filter((b) => b.md != null && b.tir != null && b.md > 0)
+    .map((b) => ({
+      ticker: b.ticker,
+      nombre: b.nombre,
+      duration: b.md!,
+      tir: b.tir! / 100,
+    }));
+
+  if (points.length < 2) {
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: 200, color: '#8ba5bf', fontSize: 13,
+        height: '100%', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', color: '#8ba5bf', fontSize: 13,
       }}>
-        Cargando curva de rendimientos...
+        Datos insuficientes para graficar curva
       </div>
     );
   }
 
-  if (subTab === 'gd' || subTab === 'al') {
-    // Hard dollar — two lines: GD series and AL series
-    const gdBonds = bonds.filter((b) => b.categoria === 'hard-dollar-gd' && b.tirPct !== null);
-    const alBonds = bonds.filter((b) => b.categoria === 'hard-dollar-al' && b.tirPct !== null);
+  const fit = fitYieldCurve(points);
+  const minD = Math.max(0, Math.min(...points.map((p) => p.duration)) - 0.3);
+  const maxD = Math.max(...points.map((p) => p.duration)) + 0.4;
+  const curveLine = generateCurveLine(fit, minD, maxD);
 
-    const allTickers = [...new Set([...gdBonds.map((b) => b.ticker), ...alBonds.map((b) => b.ticker)])];
-    const gdMap = new Map(gdBonds.map((b) => [b.ticker, b]));
-    const alMap = new Map(alBonds.map((b) => [b.ticker, b]));
-
-    const gdPoints = gdBonds
-      .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
-      .map((b) => ({ ticker: b.ticker, year: fmtDate(b.vencimiento), tir: b.tirPct }));
-
-    const alPoints = alBonds
-      .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
-      .map((b) => ({ ticker: b.ticker, year: fmtDate(b.vencimiento), tir: b.tirPct }));
-
-    const CustomDot = (props: { cx?: number; cy?: number; payload?: ChartPoint }) => {
-      const { cx, cy, payload } = props;
-      if (!cx || !cy || !payload) return null;
-      const isSelected = payload.ticker === selectedTicker;
-      return (
-        <circle
-          cx={cx} cy={cy} r={isSelected ? 6 : 4}
-          fill={isSelected ? '#D97706' : '#1F4E79'}
-          stroke="#fff" strokeWidth={isSelected ? 2 : 1}
-          style={{ cursor: 'pointer' }}
-          onClick={() => onSelect(payload.ticker)}
-        />
-      );
-    };
-
-    const CustomDotAL = (props: { cx?: number; cy?: number; payload?: ChartPoint }) => {
-      const { cx, cy, payload } = props;
-      if (!cx || !cy || !payload) return null;
-      const isSelected = payload.ticker === selectedTicker;
-      return (
-        <circle
-          cx={cx} cy={cy} r={isSelected ? 6 : 4}
-          fill={isSelected ? '#1F4E79' : '#D97706'}
-          stroke="#fff" strokeWidth={isSelected ? 2 : 1}
-          style={{ cursor: 'pointer' }}
-          onClick={() => onSelect(payload.ticker)}
-        />
-      );
-    };
-
-    return (
-      <div style={{ height: 240 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#DDE6EF" />
-            <XAxis dataKey="year" type="category" allowDuplicatedCategory={false}
-              tick={{ fontSize: 11, fill: '#8ba5bf' }} />
-            <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: '#8ba5bf' }}
-              domain={['auto', 'auto']} />
-            <Tooltip
-              formatter={(v) => [`${Number(v).toFixed(2)}%`, 'TIR']}
-              labelFormatter={(label, payload) => payload?.[0]?.payload?.ticker || label}
-              contentStyle={{ background: '#fff', border: '1px solid #DDE6EF', fontSize: 12 }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line
-              data={gdPoints} dataKey="tir" name="Globales GD (NY)"
-              stroke="#1F4E79" strokeWidth={2} dot={<CustomDot />}
-              activeDot={{ r: 6, fill: '#1F4E79' }}
-            />
-            <Line
-              data={alPoints} dataKey="tir" name="Bonares AL (ARG)"
-              stroke="#D97706" strokeWidth={2} dot={<CustomDotAL />}
-              activeDot={{ r: 6, fill: '#D97706' }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
-
-  // Generic single-line curve
-  const sorted = [...bonds]
-    .filter((b) => b.tirPct !== null)
-    .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))
-    .map((b) => ({ ticker: b.ticker, year: fmtDate(b.vencimiento), tir: b.tirPct }));
-
-  const CustomDot = (props: { cx?: number; cy?: number; payload?: ChartPoint }) => {
-    const { cx, cy, payload } = props;
-    if (!cx || !cy || !payload) return null;
-    const isSelected = payload.ticker === selectedTicker;
-    return (
-      <circle
-        cx={cx} cy={cy} r={isSelected ? 6 : 4}
-        fill={isSelected ? '#D97706' : '#1F4E79'}
-        stroke="#fff" strokeWidth={isSelected ? 2 : 1}
-        style={{ cursor: 'pointer' }}
-        onClick={() => onSelect(payload.ticker)}
-      />
-    );
-  };
+  const scatterData: ScatterPoint[] = points.map((p) => ({
+    duration: +p.duration.toFixed(3),
+    tir: +(p.tir * 100).toFixed(2),
+    ticker: p.ticker,
+    nombre: p.nombre,
+    spreadBps: calcSpreadBps(p, fit),
+    isSelected: p.ticker === selectedTicker,
+  }));
 
   return (
-    <div style={{ height: 240 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={sorted} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#DDE6EF" />
-          <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#8ba5bf' }} />
-          <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: '#8ba5bf' }}
-            domain={['auto', 'auto']} />
-          <Tooltip
-            formatter={(v) => [`${Number(v).toFixed(2)}%`, 'TIR']}
-            labelFormatter={(label, payload) => payload?.[0]?.payload?.ticker || label}
-            contentStyle={{ background: '#fff', border: '1px solid #DDE6EF', fontSize: 12 }}
-          />
-          <Line
-            dataKey="tir" name="TIR" stroke="#1F4E79" strokeWidth={2}
-            dot={<CustomDot />} activeDot={{ r: 6, fill: '#1F4E79' }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {title && (
+        <div style={{ fontSize: 12, color: '#4a6880', marginBottom: 6, fontWeight: 500 }}>
+          {title}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: '#4a6880', marginBottom: 6, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ color: '#16A34A' }}>&#9679; Barato (sobre curva)</span>
+        <span style={{ color: '#DC2626' }}>&#9679; Caro (bajo curva)</span>
+        <span style={{ color: '#D97706' }}>&#9679; En linea</span>
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart margin={{ top: 8, right: 16, bottom: 28, left: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#DDE6EF" />
+            <XAxis
+              dataKey="duration"
+              type="number"
+              name="Duration"
+              domain={[minD, maxD]}
+              tickFormatter={(v) => v.toFixed(1)}
+              label={{
+                value: 'Duration (anos)',
+                position: 'insideBottom',
+                offset: -14,
+                fontSize: 10,
+                fill: '#8ba5bf',
+              }}
+              tick={{ fontSize: 10, fill: '#8ba5bf' }}
+            />
+            <YAxis
+              dataKey="tir"
+              type="number"
+              name="TIR"
+              tickFormatter={(v) => `${v.toFixed(0)}%`}
+              tick={{ fontSize: 10, fill: '#8ba5bf' }}
+              domain={['auto', 'auto']}
+            />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0]?.payload as ScatterPoint | undefined;
+                if (!d?.ticker) {
+                  // curve point
+                  const cp = payload[0]?.payload as { duration: number; curvaTir: number };
+                  if (!cp?.curvaTir) return null;
+                  return (
+                    <div style={{
+                      background: '#fff', border: '1px solid #DDE6EF',
+                      padding: '6px 10px', borderRadius: 4, fontSize: 11,
+                    }}>
+                      <div style={{ color: '#4a6880' }}>Curva ajustada</div>
+                      <div>Duration: {cp.duration?.toFixed(2)}</div>
+                      <div>TIR: {cp.curvaTir?.toFixed(2)}%</div>
+                    </div>
+                  );
+                }
+                const spreadColor =
+                  d.spreadBps > 10 ? '#16A34A' : d.spreadBps < -10 ? '#DC2626' : '#D97706';
+                return (
+                  <div style={{
+                    background: '#fff', border: '1px solid #DDE6EF',
+                    padding: '8px 12px', borderRadius: 4, fontSize: 12,
+                  }}>
+                    <div style={{ fontWeight: 700, color: '#0D1B2A', marginBottom: 3 }}>
+                      {d.ticker}
+                    </div>
+                    <div>TIR: {d.tir?.toFixed(2)}%</div>
+                    <div>Duration: {d.duration?.toFixed(2)} anos</div>
+                    <div style={{ color: spreadColor, marginTop: 3 }}>
+                      {d.spreadBps > 0 ? '+' : ''}{d.spreadBps} bps vs curva
+                      {d.spreadBps > 10 ? ' (barato)' : d.spreadBps < -10 ? ' (caro)' : ' (en linea)'}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+            <Line
+              data={curveLine}
+              dataKey="curvaTir"
+              dot={false}
+              strokeWidth={2}
+              stroke="#1F4E79"
+              name="Curva ajustada"
+              type="monotone"
+            />
+            <Scatter
+              data={scatterData}
+              name="Bonos"
+              shape={(p: object) => (
+                <CustomDot
+                  {...(p as { cx?: number; cy?: number; payload?: ScatterPoint })}
+                  onSelect={onSelect}
+                />
+              )}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

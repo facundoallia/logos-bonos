@@ -1,4 +1,15 @@
-import { BondConfig, CashflowRow } from './types';
+import { CashflowRow } from './types';
+
+// Minimal shape needed by the cashflow generator
+interface BondConfig {
+  ticker: string;
+  vencimiento: string;
+  amortizacion: string;
+  cuponAnualPct: number;
+  frecuenciaCupon: string;
+  monedaCupon: string;
+  monedaCapital: string;
+}
 
 // Step-up coupon schedules for 2020 restructured bonds (Argentina indenture)
 // Coupons per $100 VN, semi-annual periods

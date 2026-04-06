@@ -29,17 +29,26 @@ export async function GET(request: NextRequest) {
   );
   const priceMap = new Map<string, LiveBond>(allPrices.map((p) => [p.symbol, p]));
 
-  // Fetch bonistas metadata in parallel
-  const bonistasResults = await Promise.allSettled(
-    filtered.map((b) =>
-      fetch(`https://bonistas.com/api/bond/${b.ticker}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        next: { revalidate: 300 },
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)
-    )
-  );
+  // Fetch bonistas metadata in batches of 15 to avoid rate limiting
+  // (64 parallel requests cause ~45% to return null due to throttling)
+  const BATCH = 15;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bonistasResults: PromiseSettledResult<any>[] = [];
+  for (let i = 0; i < filtered.length; i += BATCH) {
+    const slice = filtered.slice(i, i + BATCH);
+    const batch = await Promise.allSettled(
+      slice.map((b) =>
+        fetch(`https://bonistas.com/api/bond/${b.ticker}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          next: { revalidate: 300 },
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+      )
+    );
+    bonistasResults.push(...batch);
+    if (i + BATCH < filtered.length) await new Promise((r) => setTimeout(r, 50));
+  }
 
   const enriched = filtered.map((bond, i) => {
     const bonistasRaw =
@@ -82,9 +91,9 @@ export async function GET(request: NextRequest) {
       fairValue: meta?.fair_value ?? null,
       parity: meta?.parity ?? null,
       volumenM: meta?.volume ?? null,
-      tir: tirRaw !== null ? +(tirRaw * 100).toFixed(2) : null,
+      tir: tirRaw !== null ? +(tirRaw * 100).toFixed(4) : null,  // 4 dec para consistencia con TEM
       tem: tem !== null ? +(tem * 100).toFixed(4) : null,
-      tna: tna !== null ? +(tna * 100).toFixed(2) : null,
+      tna: tna !== null ? +(tna * 100).toFixed(4) : null,
       md: mdRaw !== null ? +mdRaw.toFixed(2) : null,
       couponPct: meta?.coupon != null ? +(meta.coupon * 100).toFixed(4) : null,
       precioUSD: priceD?.c ?? null,

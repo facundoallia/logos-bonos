@@ -8,39 +8,45 @@ import { HistoricalPoint, RangeId, EnrichedBond } from '@/lib/types';
 import { getPaymentDatesInRange } from '@/lib/paymentDates';
 
 interface Props {
-  ticker: string | null;
-  isUSD: boolean;
-  selectedBond?: EnrichedBond | null;
+  selectedBond: EnrichedBond | null;
 }
 
 const RANGES: RangeId[] = ['1M', '3M', '6M', '1Y', 'MAX'];
 const PAYMENT_COLORS = { C: '#1F4E79', A: '#D97706', 'C+A': '#16A34A' } as const;
-
 const RANGE_DAYS: Record<RangeId, number> = {
   '1M': 30, '3M': 90, '6M': 180, '1Y': 365, MAX: 99999,
 };
 
 function fmtAxis(d: string): string {
   const dt = new Date(d);
-  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   return `${months[dt.getMonth()]} ${String(dt.getFullYear()).slice(2)}`;
 }
 
-export function PriceChart({ ticker, isUSD, selectedBond }: Props) {
+export function PriceChart({ selectedBond }: Props) {
   const [range, setRange] = useState<RangeId>('1Y');
   const [data, setData] = useState<HistoricalPoint[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const isUSD = selectedBond?.sufijoPrecioUSD === 'D';
+  const histTicker = selectedBond?.histTicker ?? null;
+  const hasHistorical = selectedBond?.hasHistorical ?? false;
+  const ticker = selectedBond?.ticker ?? null;
+
   useEffect(() => {
-    if (!ticker) return;
-    const suffix = isUSD ? 'D' : '';
+    if (!ticker || !hasHistorical || !histTicker) {
+      setData([]);
+      return;
+    }
     setLoading(true);
-    fetch(`/api/historical/${ticker}${suffix}?range=${range}`)
+    fetch(`/api/historical/${histTicker}?range=${range}`)
       .then((r) => r.json())
-      .then((d) => { setData(Array.isArray(d) ? d : []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [ticker, range, isUSD]);
+      .then((d) => {
+        setData(Array.isArray(d) ? d : []);
+        setLoading(false);
+      })
+      .catch(() => { setData([]); setLoading(false); });
+  }, [ticker, range, histTicker, hasHistorical]);
 
   const rangeStart = new Date();
   rangeStart.setDate(rangeStart.getDate() - RANGE_DAYS[range]);
@@ -62,7 +68,8 @@ export function PriceChart({ ticker, isUSD, selectedBond }: Props) {
         alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8,
       }}>
         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#0D1B2A' }}>
-          Historico de Precio{ticker ? ` - ${ticker}${isUSD ? 'D' : ''}` : ''}
+          Historico de Precio
+          {ticker ? ` - ${histTicker}` : ''}
         </h3>
         <div style={{ display: 'flex', gap: 4 }}>
           {RANGES.map((r) => (
@@ -84,25 +91,28 @@ export function PriceChart({ ticker, isUSD, selectedBond }: Props) {
       </div>
 
       {!ticker ? (
-        <div style={{
-          height: 180, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', color: '#8ba5bf', fontSize: 13,
-        }}>
+        <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8ba5bf', fontSize: 13 }}>
           Selecciona un bono para ver el historico
         </div>
-      ) : loading ? (
+      ) : !hasHistorical ? (
         <div style={{
-          height: 180, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', color: '#8ba5bf', fontSize: 13,
+          height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#8ba5bf', fontSize: 13, background: '#F8FAFC',
+          borderRadius: 4, border: '1px dashed #DDE6EF',
         }}>
+          Historico no disponible para este instrumento
+        </div>
+      ) : loading ? (
+        <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8ba5bf', fontSize: 13 }}>
           Cargando...
         </div>
       ) : data.length === 0 ? (
         <div style={{
-          height: 180, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', color: '#8ba5bf', fontSize: 13,
+          height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#8ba5bf', fontSize: 13, background: '#F8FAFC',
+          borderRadius: 4, border: '1px dashed #DDE6EF',
         }}>
-          Sin datos disponibles
+          Sin datos disponibles para el rango seleccionado
         </div>
       ) : (
         <>
@@ -117,18 +127,17 @@ export function PriceChart({ ticker, isUSD, selectedBond }: Props) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#DDE6EF" />
                 <XAxis
-                  dataKey="date"
-                  tickFormatter={fmtAxis}
-                  tick={{ fontSize: 10, fill: '#8ba5bf' }}
-                  interval="preserveStartEnd"
+                  dataKey="date" tickFormatter={fmtAxis}
+                  tick={{ fontSize: 10, fill: '#8ba5bf' }} interval="preserveStartEnd"
                 />
                 <YAxis
                   domain={['auto', 'auto']}
-                  tickFormatter={(v) =>
-                    isUSD ? `$${v}` : v.toLocaleString('es-AR', { maximumFractionDigits: 0 })
+                  tickFormatter={(v) => isUSD
+                    ? `$${v}`
+                    : v.toLocaleString('es-AR', { maximumFractionDigits: 0 })
                   }
                   tick={{ fontSize: 10, fill: '#8ba5bf' }}
-                  width={isUSD ? 48 : 60}
+                  width={isUSD ? 46 : 62}
                 />
                 <Tooltip
                   labelFormatter={(label) => new Date(label).toLocaleDateString('es-AR')}
@@ -147,22 +156,12 @@ export function PriceChart({ ticker, isUSD, selectedBond }: Props) {
                     stroke={PAYMENT_COLORS[p.tipo]}
                     strokeDasharray="3 3"
                     strokeWidth={1.5}
-                    label={{
-                      value: p.tipo,
-                      position: 'top',
-                      fontSize: 9,
-                      fill: PAYMENT_COLORS[p.tipo],
-                    }}
+                    label={{ value: p.tipo, position: 'top', fontSize: 9, fill: PAYMENT_COLORS[p.tipo] }}
                   />
                 ))}
                 <Area
-                  type="monotone"
-                  dataKey="c"
-                  name={priceLabel}
-                  stroke="#1F4E79"
-                  strokeWidth={2}
-                  fill="url(#priceGrad)"
-                  dot={false}
+                  type="monotone" dataKey="c" name={priceLabel}
+                  stroke="#1F4E79" strokeWidth={2} fill="url(#priceGrad)" dot={false}
                 />
               </AreaChart>
             </ResponsiveContainer>

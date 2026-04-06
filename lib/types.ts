@@ -13,6 +13,10 @@ export interface BondConfigSlim {
   nombre: string;
   categoria: BondCategoria;
   sufijoPrecioUSD: 'D' | 'C' | null;
+  /** Override data912 D-ticker (e.g. BOPREAL: BPOA7 -> BPA7D) */
+  tickerD?: string;
+  /** Override data912 C-ticker (e.g. BOPREAL: BPOA7 -> BPA7C) */
+  tickerC?: string;
 }
 
 export interface LiveBond {
@@ -47,6 +51,7 @@ export interface EnrichedBond extends BondConfigSlim {
   monedaCupon: string | null;
   amortizacion: string | null;
   index: string | null;
+  settlement: string | null;      // '24hs' | 'CI' | etc.
   daysToCoupon: number | null;
   daysToFinish: number | null;
   fairValue: number | null;
@@ -63,6 +68,9 @@ export interface EnrichedBond extends BondConfigSlim {
   precioMEP: number | null;
   varDia: number | null;
   volumenBYMA: number | null;
+  // Historical
+  histTicker: string;
+  hasHistorical: boolean;
 }
 
 export interface RatesData {

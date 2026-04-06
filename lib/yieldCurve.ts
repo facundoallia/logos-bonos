@@ -32,18 +32,30 @@ export interface FittedCurve {
   a: number;
   b: number;
   c: number;
+  minTir: number;
+  maxTir: number;
   predict: (x: number) => number;
 }
 
 export function fitYieldCurve(points: BondPoint[]): FittedCurve {
   const n = points.length;
-  if (n < 2) {
-    return { a: points[0]?.tir ?? 0, b: 0, c: 0, predict: () => points[0]?.tir ?? 0 };
-  }
-  if (n === 2) {
-    const b = (points[1].tir - points[0].tir) / (points[1].duration - points[0].duration + 1e-9);
+  const minTir = Math.min(...points.map((p) => p.tir));
+  const maxTir = Math.max(...points.map((p) => p.tir));
+
+  // Clamped predict: never goes below 0 or outside [minTir*0.5, maxTir*1.5]
+  const clamp = (v: number) =>
+    Math.max(Math.max(0, minTir * 0.5), Math.min(v, maxTir * 1.5));
+
+  if (n < 3) {
+    if (n === 1) {
+      const a = points[0].tir;
+      return { a, b: 0, c: 0, minTir, maxTir, predict: () => a };
+    }
+    // Linear fit for 2 points
+    const dx = points[1].duration - points[0].duration;
+    const b = dx !== 0 ? (points[1].tir - points[0].tir) / dx : 0;
     const a = points[0].tir - b * points[0].duration;
-    return { a, b, c: 0, predict: (x) => a + b * x };
+    return { a, b, c: 0, minTir, maxTir, predict: (x) => clamp(a + b * x) };
   }
 
   const X = points.map((p) => [1, p.duration, p.duration * p.duration]);
@@ -57,7 +69,7 @@ export function fitYieldCurve(points: BondPoint[]): FittedCurve {
     }
   }
   const [a, b, c] = solve3x3(XtX, Xty);
-  return { a, b, c, predict: (x) => a + b * x + c * x * x };
+  return { a, b, c, minTir, maxTir, predict: (x) => clamp(a + b * x + c * x * x) };
 }
 
 export function generateCurveLine(

@@ -149,7 +149,7 @@ export function BondsApp() {
       }}>
         <div>
           <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: '#0D1B2A' }}>
-            Bonos Argentinos
+            Panel de Análisis de Bonos Argentinos
           </h1>
           <p style={{ margin: '2px 0 0', fontSize: 11, color: '#8ba5bf' }}>
             Logos Servicios Financieros | datos: data912.com + bonistas.com

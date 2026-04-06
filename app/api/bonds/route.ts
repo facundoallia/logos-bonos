@@ -4,23 +4,6 @@ import bondsList from '@/config/bonds-config.json';
 
 const bonds = bondsList as BondConfigSlim[];
 
-// These tickers have historical data in data912 historical/bonds/{ticker}
-// (D-suffix for USD bonds, base ticker for ARS bonds that have history)
-const HAS_HISTORICAL = new Set([
-  // GD globales (D suffix)
-  'GD29','GD30','GD35','GD38','GD41','GD46',
-  // AL bonares (D suffix)
-  'AO27','AL29','AN29','AL30','AL35','AE38','AL41',
-  // CER con historia larga
-  'TX26','TX28','TX31','DICP','PARP','PAP0','DIP0','CUAP',
-  // Fijo con historia
-  'TO26',
-  // BADLAR
-  'BDC28',
-  // BOPREAL: solo BPY26 en ARS (los demas no tienen hist)
-  'BPY26',
-]);
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category') || 'all';
@@ -103,13 +86,14 @@ export async function GET(request: NextRequest) {
       tem: tem !== null ? +(tem * 100).toFixed(4) : null,
       tna: tna !== null ? +(tna * 100).toFixed(2) : null,
       md: mdRaw !== null ? +mdRaw.toFixed(2) : null,
+      couponPct: meta?.coupon != null ? +(meta.coupon * 100).toFixed(4) : null,
       precioUSD: priceD?.c ?? null,
       precioARS: priceBase?.c ?? null,
       precioMEP: priceC?.c ?? null,
       varDia: mainPrice?.pct_change ?? null,
       volumenBYMA: mainPrice?.q_op ?? null,
       histTicker,
-      hasHistorical: HAS_HISTORICAL.has(bond.ticker),
+      hasHistorical: true, // always try; gracefully shows 'Sin datos' if empty
     };
   });
 

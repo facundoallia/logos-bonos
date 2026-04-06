@@ -58,6 +58,25 @@ export function fitYieldCurve(points: BondPoint[]): FittedCurve {
     return { a, b, c: 0, minTir, maxTir, predict: (x) => clamp(a + b * x) };
   }
 
+  const minD = Math.min(...points.map((p) => p.duration));
+  const maxD = Math.max(...points.map((p) => p.duration));
+  const span = maxD - minD;
+
+  // Force linear when span > 3 years or few points — prevents unstable U-shapes
+  // (common in CER tab where short LECERs + long DICP/PARP create extreme dispersion)
+  if (n < 5 || span > 3) {
+    // OLS linear regression
+    let sumX = 0, sumY = 0, sumXX = 0, sumXY = 0;
+    for (const p of points) {
+      sumX += p.duration; sumY += p.tir;
+      sumXX += p.duration * p.duration; sumXY += p.duration * p.tir;
+    }
+    const denom = n * sumXX - sumX * sumX;
+    const b = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+    const a = (sumY - b * sumX) / n;
+    return { a, b, c: 0, minTir, maxTir, predict: (x) => clamp(a + b * x) };
+  }
+
   const X = points.map((p) => [1, p.duration, p.duration * p.duration]);
   const y = points.map((p) => p.tir);
   const XtX = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];

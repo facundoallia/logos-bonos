@@ -58,10 +58,11 @@ export interface EnrichedBond extends BondConfigSlim {
   parity: number | null;
   volumenM: number | null;
   // Rates
-  tir: number | null;     // % ej: 9.95
-  tem: number | null;     // % ej: 0.7948
-  tna: number | null;     // % ej: 9.54
-  md: number | null;      // modified duration ej: 4.70
+  tir: number | null;        // % ej: 9.95
+  tem: number | null;        // % ej: 0.7948
+  tna: number | null;        // % ej: 9.54
+  md: number | null;         // modified duration ej: 4.70
+  couponPct: number | null;  // coupon rate % from bonistas ej: 3.0 quarterly
   // Prices
   precioUSD: number | null;
   precioARS: number | null;

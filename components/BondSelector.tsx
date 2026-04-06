@@ -18,14 +18,6 @@ const GRUPOS = [
   { label: 'BOPREAL', cat: 'bopreal' },
 ];
 
-function fmtDate(s: string | null): string {
-  if (!s) return '';
-  const d = new Date(s);
-  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  return `${months[d.getMonth()]} ${d.getFullYear()}`;
-}
-
 export function BondSelector({ bonds, value, onChange }: Props) {
   return (
     <select
@@ -47,7 +39,7 @@ export function BondSelector({ bonds, value, onChange }: Props) {
           <optgroup key={g.cat} label={g.label}>
             {items.map((b) => (
               <option key={b.ticker} value={b.ticker}>
-                {b.ticker} - {fmtDate(b.vencimiento)}
+                {b.nombre}
               </option>
             ))}
           </optgroup>

@@ -134,12 +134,14 @@ export function YieldCurve({ bonds, onSelect, selectedTicker, title }: Props) {
     };
   });
 
-  const allTirs = allPoints.map((p) => p.tir * 100);
-  const yMin = Math.max(0, Math.min(...allTirs) - 2);
-  const yMax = Math.max(...allTirs) + 2;
-  const allDurs = allPoints.map((p) => p.duration);
-  const xMin = Math.max(0, Math.min(...allDurs) - 0.2);
-  const xMax = Math.max(...allDurs) + 0.2;
+  // Axes scale to ACTIVE (non-excluded) points only — excluded dots go out of view
+  const visiblePoints = activePoints.length >= 1 ? activePoints : allPoints;
+  const visibleTirs = visiblePoints.map((p) => p.tir * 100);
+  const yMin = Math.max(0, Math.min(...visibleTirs) - 2);
+  const yMax = Math.max(...visibleTirs) + 2;
+  const visibleDurs = visiblePoints.map((p) => p.duration);
+  const xMin = Math.max(0, Math.min(...visibleDurs) * 0.9);
+  const xMax = Math.max(...visibleDurs) * 1.1;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -164,7 +166,7 @@ export function YieldCurve({ bonds, onSelect, selectedTicker, title }: Props) {
             <CartesianGrid strokeDasharray="3 3" stroke="#DDE6EF" />
             <XAxis
               dataKey="duration" type="number" name="Duration"
-              domain={[Math.max(0, xMin - 0.1), xMax + 0.1]}
+              domain={[xMin, xMax]}
               tickFormatter={(v) => v.toFixed(1)}
               label={{ value: 'Duration (años)', position: 'insideBottom', offset: -14, fontSize: 10, fill: '#8ba5bf' }}
               tick={{ fontSize: 10, fill: '#8ba5bf' }}

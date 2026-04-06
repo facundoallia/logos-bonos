@@ -274,9 +274,9 @@ export function CashflowCalculator({ selectedBond, allBonds }: Props) {
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#0D1B2A', marginTop: 3 }}>${fmtARS(montoNum)} ARS</div>
                 </div>
                 <div style={{ background: '#EBF5FB', borderRadius: 4, padding: '10px 14px' }}>
-                  <div style={{ fontSize: 10, color: '#8ba5bf' }}>VN comprado</div>
+                  <div style={{ fontSize: 10, color: '#8ba5bf' }}>Nominales comprados (VN)</div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#1F4E79', marginTop: 3 }}>
-                    ${fmtARS(montoNum / (precioNum / 100))} ARS
+                    {(montoNum / (precioNum / 100)).toLocaleString('es-AR', { maximumFractionDigits: 2 })}
                   </div>
                   <div style={{ fontSize: 10, color: '#8ba5bf' }}>al precio {precioNum.toFixed(2)}</div>
                 </div>

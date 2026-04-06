@@ -148,12 +148,9 @@ export function BondsApp() {
         justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
       }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: '#0D1B2A' }}>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 22 : 30, fontWeight: 700, color: '#0D1B2A', lineHeight: 1.2 }}>
             Panel de Análisis de Bonos Argentinos
           </h1>
-          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#8ba5bf' }}>
-            Logos Servicios Financieros | datos: data912.com + bonistas.com
-          </p>
         </div>
         {rates && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -371,12 +368,18 @@ export function BondsApp() {
       {/* Footer */}
       <div style={{
         borderTop: '1px solid #DDE6EF', paddingTop: 14,
-        fontSize: 10, color: '#8ba5bf', lineHeight: 1.6,
+        fontSize: 10, color: '#8ba5bf', lineHeight: 1.8,
       }}>
-        Precios: data912.com (delayed ~2hs) | TIR, Duration: bonistas.com |
-        Tipos de cambio: dolarapi.com | Logos Servicios Financieros — Agente
-        Productor Bursatil N&#176;1271 CNV.
-        Informacion de caracter educativo e informativo. No constituye recomendacion de inversion.
+        <div>
+          <strong style={{ color: '#4a6880' }}>Logos Servicios Financieros</strong>
+          {' '}— Agente Productor Bursátil N°1271 CNV.
+        </div>
+        <div>
+          Datos: precios data912.com (delayed ~2hs) · TIR y Duration bonistas.com · Tipos de cambio dolarapi.com
+        </div>
+        <div>
+          Información de carácter educativo e informativo. No constituye recomendación de inversión.
+        </div>
       </div>
 
       {/* Floating WhatsApp button */}

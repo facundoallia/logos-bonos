@@ -29,31 +29,28 @@ export async function GET(request: NextRequest) {
   );
   const priceMap = new Map<string, LiveBond>(allPrices.map((p) => [p.symbol, p]));
 
-  // Fetch bonistas metadata in batches of 15 to avoid rate limiting
-  // (64 parallel requests cause ~45% to return null due to throttling)
-  const BATCH = 15;
+  // Fetch ALL bonistas metadata in ONE bulk request (was 80 per-ticker calls
+  // batched to dodge throttling, but still ~30% of TIRs came back null in prod).
+  // The bulk endpoint is a superset of /api/bond/{ticker} and avoids rate limits.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bonistasResults: PromiseSettledResult<any>[] = [];
-  for (let i = 0; i < filtered.length; i += BATCH) {
-    const slice = filtered.slice(i, i + BATCH);
-    const batch = await Promise.allSettled(
-      slice.map((b) =>
-        fetch(`https://bonistas.com/api/bond/${b.ticker}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          next: { revalidate: 300 },
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null)
-      )
-    );
-    bonistasResults.push(...batch);
-    if (i + BATCH < filtered.length) await new Promise((r) => setTimeout(r, 50));
-  }
+  const bonistasMap = new Map<string, any>();
+  try {
+    const r = await fetch('https://bonistas.com/api/bonds', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      next: { revalidate: 300 },
+    });
+    if (r.ok) {
+      const all = await r.json();
+      if (Array.isArray(all)) {
+        for (const b of all) {
+          if (b?.ticker) bonistasMap.set(String(b.ticker).toUpperCase(), b);
+        }
+      }
+    }
+  } catch {}
 
-  const enriched = filtered.map((bond, i) => {
-    const bonistasRaw =
-      bonistasResults[i].status === 'fulfilled' ? bonistasResults[i].value : null;
-    const meta = bonistasRaw?.bond ?? bonistasRaw ?? null;
+  const enriched = filtered.map((bond) => {
+    const meta = bonistasMap.get(bond.ticker.toUpperCase()) ?? null;
 
     const tirRaw: number | null = meta?.tir ?? null;
     const mdRaw: number | null = meta?.modified_duration ?? null;
@@ -95,7 +92,8 @@ export async function GET(request: NextRequest) {
       tem: tem !== null ? +(tem * 100).toFixed(4) : null,
       tna: tna !== null ? +(tna * 100).toFixed(4) : null,
       md: mdRaw !== null ? +mdRaw.toFixed(2) : null,
-      couponPct: meta?.coupon != null ? +(meta.coupon * 100).toFixed(4) : null,
+      couponPct: null, // bonistas `coupon` viene con unidades inconsistentes (CUAP=1250) → no confiable
+
       precioUSD: priceD?.c ?? null,
       precioARS: priceBase?.c ?? null,
       precioMEP: priceC?.c ?? null,
